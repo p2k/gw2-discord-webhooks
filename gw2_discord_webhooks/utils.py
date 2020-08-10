@@ -42,9 +42,12 @@ def get_json(url, **params):
     return r.json()
 
 
+def get_worlds(*world_ids):
+    return get_json("https://api.guildwars2.com/v2/worlds", ids=",".join(map(str, itertools.chain.from_iterable(world_ids))))
+
+
 def get_world_names(*world_ids):
-    worlds = get_json("https://api.guildwars2.com/v2/worlds", ids=",".join(map(str, itertools.chain.from_iterable(world_ids))))
-    return dict((world["id"], world["name"]) for world in worlds)
+    return dict((world["id"], world["name"]) for world in get_worlds(*world_ids))
 
 
 def get_next_reset(eu=True):
@@ -65,6 +68,44 @@ def get_next_reset(eu=True):
     elif n.time() > reset_time:
         d += datetime.timedelta(days=7)
     return datetime.datetime.combine(d, reset_time, dateutil.tz.UTC)
+
+
+def last_of_month(d, w):
+    """
+    Returns the last desired weekday of the month for the given date.
+    """
+    # Go to last day of month
+    if d.month == 12:
+        d = datetime.date(d.year, 12, 31)
+    else:
+        d = datetime.date(d.year, d.month + 1, 1) - datetime.timedelta(days=1)
+    # Subtract weekday differnce
+    if d.weekday() > w:
+        d -= datetime.timedelta(days=d.weekday() - w)
+    elif d.weekday() < w:
+        d -= datetime.timedelta(days=7 + d.weekday() - w)
+    return d
+
+
+def get_next_relink():
+    """
+    Returns the next relink time.
+
+    Defined as: the last Friday of every odd numbered month.
+    """
+    n = datetime.datetime.now()
+    d = n.date()
+    if d.month == 12:  # December
+        return last_of_month(datetime.date(d.year + 1, 1, 1), 4)
+    if d.month & 1 == 0:  # Even month
+        return last_of_month(datetime.date(d.year, d.month + 1, 1), 4)
+    # Odd month, look in own month
+    d = last_of_month(d, 4)
+    if n.date() >= d:  # We passed the date
+        if d.month == 11:  # November
+            return last_of_month(datetime.date(d.year + 1, 1, 1), 4)
+        return last_of_month(datetime.date(d.year, d.month + 2, 1), 4)
+    return d
 
 
 def format_duration(d):
@@ -113,7 +154,7 @@ def formatted_text_to_markdown(ft):
     return s.getvalue()
 
 
-def print_formatted_text(ft):
+def print_formatted_text(title, description, fields=[], markdown=False):
     """
     Renders emoji to unicode and prints the formatted text to console.
     """
@@ -121,10 +162,25 @@ def print_formatted_text(ft):
     from prompt_toolkit import print_formatted_text
     from prompt_toolkit.formatted_text import FormattedText
 
-    print_formatted_text(FormattedText((f, emojize(t)) for f, t in ft))
+    if markdown:
+        ft = [("bold", title), ("", "\n\n")]
+        ft.extend(description)
+        print(formatted_text_to_markdown(ft))
+        for name, value in fields:
+            ft = [("", "---\n"), ("bold", name), ("", "\n\n")]
+            ft.extend(value)
+            print(formatted_text_to_markdown(ft))
+    else:
+        ft = [("bold", emojize(title, use_aliases=True)), ("", "\n\n")]
+        ft.extend((f, emojize(t, use_aliases=True)) for f, t in description)
+        print_formatted_text(FormattedText(ft))
+        for name, value in fields:
+            ft = [("", "---\n"), ("bold", emojize(name, use_aliases=True)), ("", "\n\n")]
+            ft.extend((f, emojize(t, use_aliases=True)) for f, t in value)
+            print_formatted_text(FormattedText(ft))
 
 
-def execute_discord_webhook(url, thumbnail, username, title, color, ft):
+def execute_discord_webhook(url, thumbnail, username, color, title, description, fields=[]):
     """
     Renders formatted text to markdown and executes the discord webhook.
     """
@@ -132,9 +188,11 @@ def execute_discord_webhook(url, thumbnail, username, title, color, ft):
 
     webhook = DiscordWebhook(url, username=username)
 
-    embed = DiscordEmbed(title=title, description=formatted_text_to_markdown(ft), color=color)
+    embed = DiscordEmbed(title=title, description=formatted_text_to_markdown(description), color=color)
     if thumbnail is not None:
         embed.set_thumbnail(url=thumbnail)
+    for name, value in fields:
+        embed.add_embed_field(name=name, value=formatted_text_to_markdown(value))
     embed.set_timestamp()
 
     webhook.add_embed(embed)

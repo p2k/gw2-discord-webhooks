@@ -33,7 +33,6 @@ from .utils import (
     get_world_names,
     get_next_reset,
     format_duration,
-    formatted_text_to_markdown,
     print_formatted_text,
     execute_discord_webhook,
 )
@@ -175,15 +174,15 @@ def predict_matchup(world):
     }
 
 
-def format_world_name(world, main_world, linked_worlds, world_names):
+def format_world_name(home_world, main_world, linked_worlds, world_names):
     """
     Returns a formatted text fragment representing the given world plus its linked worlds.
 
-    If any of the worlds is the main world, it will be underlined.
+    If any of the worlds is the home world, it will be underlined.
     """
 
     ft = [
-        ("underline" if main_world == world else "", world_names[main_world]),
+        ("underline" if main_world == home_world else "", world_names[main_world]),
     ]
 
     first_lw = True
@@ -193,7 +192,7 @@ def format_world_name(world, main_world, linked_worlds, world_names):
             first_lw = False
         else:
             ft.append(("", ", "))
-        ft.append(("underline" if lw == world else "", world_names[lw]))
+        ft.append(("underline" if lw == home_world else "", world_names[lw]))
 
     if not first_lw:
         ft.append(("", ")"))
@@ -205,7 +204,7 @@ def format_title(r):
     return f"{r.strftime('%Y-%m-%d')} Reset Matchup Prediction:"
 
 
-def format_prediction(p, tzs, ampm, include_title=False):
+def format_prediction(p, tzs, ampm):
     """
     Returns a formatted text fragment representing the given matchup prediction.
 
@@ -218,9 +217,6 @@ def format_prediction(p, tzs, ampm, include_title=False):
     r = p["reset"]
 
     ft = []
-    if include_title:
-        ft.append(("bold", format_title(r)))
-        ft.append(("", "\n\n"))
 
     if len(tzs) > 0:
         ft.append(("", "at "))
@@ -277,17 +273,21 @@ def main():
     parser.add_argument("-p", help="print to console, do not send", action="store_true", default=False)
     parser.add_argument("-m", help="when printing to console, output as markdown", action="store_true", default=False)
 
+    # Options from other scripts
+    parser.add_argument("--population-username", help=configargparse.SUPPRESS)
+    parser.add_argument("--population-log", help=configargparse.SUPPRESS)
+
     args = parser.parse_args()
 
     tzs = [] if args.timezones is None else args.timezones.split(",")
     prediction = predict_matchup(args.world)
 
-    if args.log:
+    if args.matches_log:
         # Parse logfile
-        log_exists = os.path.exists(args.log)
+        log_exists = os.path.exists(args.matches_log)
         formatted_reset = prediction["reset"].strftime(LOG_TIME_FORMAT)
         lp_matchup = None
-        with open(args.log, "r+" if log_exists else "w", newline="") as f:
+        with open(args.matches_log, "r+" if log_exists else "w", newline="") as f:
             if log_exists:
                 for row in csv.reader(f, delimiter=";", quotechar='"'):
                     if row[1] == formatted_reset:
@@ -314,28 +314,21 @@ def main():
                 print("Matchup did not change.")
                 return 0
 
+    title = format_title(prediction["reset"])
+    description = format_prediction(prediction, tzs, args.ampm)
+
     if args.p:
-        ft = format_prediction(prediction, tzs, args.ampm, True)
-        if args.m:
-            print(formatted_text_to_markdown(ft))
-        else:
-            print_formatted_text(ft)
-        return 0
+        print_formatted_text(title, description, markdown=args.m)
     else:
         if args.webhook_url is None:
             print("No webhook url configured!", file=sys.stderr)
             return 1
 
-        ft = format_prediction(prediction, tzs, args.ampm)
         execute_discord_webhook(
-            args.webhook_url,
-            args.webhook_thumbnail,
-            args.matches_username,
-            format_title(prediction["reset"]),
-            COLORS[prediction["color"]],
-            ft,
+            args.webhook_url, args.webhook_thumbnail, args.matches_username, COLORS[prediction["color"]], title, description,
         )
-        return 0
+
+    return 0
 
 
 if __name__ == "__main__":

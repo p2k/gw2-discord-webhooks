@@ -15,6 +15,7 @@ Commands
 --------
 
 * `post_gw2_matches`
+* `post_gw2_population`
 
 Configuration
 -------------
@@ -36,6 +37,8 @@ webhook-thumbnail=https://cdn.discordapp.com/attachments/.../.../LOGO.png
 timezones=Europe/Berlin,Europe/London
 matches-username=Matches
 matches-log=matches.log
+population-username=Population
+population-log=population.log
 change-only=true
 ```
 

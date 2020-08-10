@@ -59,5 +59,10 @@ setup(
         "Topic :: Internet :: WWW/HTTP",
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
     ],
-    entry_points={"console_scripts": ["post_gw2_matches=gw2_discord_webhooks.matches:main",],},
+    entry_points={
+        "console_scripts": [
+            "post_gw2_matches=gw2_discord_webhooks.matches:main",
+            "post_gw2_population=gw2_discord_webhooks.population:main",
+        ]
+    },
 )
