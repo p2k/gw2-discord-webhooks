@@ -146,7 +146,7 @@ def predict_matchup(world):
         else:
             tier_below_match = match_with_id(all_matches, f"{region}-{next_tier+1}")
             tier_below_winner = match_ranking(tier_below_match)[0]
-            next_red_main = tier_below_match["worlds"][tier_above_loser]
+            next_red_main = tier_below_match["worlds"][tier_below_winner]
 
     # Get linked worlds
     next_green_linked = linked_worlds(all_matches, next_green_main)
